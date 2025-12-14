@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Advanced Robot Simulator - Smooth ROTATE</title>
+    <style>
+        body { font-family: monospace; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; }
+        #container { display: flex; gap: 40px; margin-top: 20px; }
+        #canvas { border:1px solid #333; background:#fff; }
+        #log { width: 350px; height: 500px; border:1px solid #333; padding:10px; overflow-y: auto; background:#fafafa; }
+        textarea { width: 400px; height: 150px; font-family: monospace; }
+        button, select { padding: 10px 15px; margin-top: 10px; cursor:pointer; font-size: 14px; }
+        h3 { margin: 10px 0 5px 0; }
+        #controls { margin-top: 10px; display: flex; gap: 10px; }
+    </style>
+</head>
+<body>
+
+<h2>Advanced Robot Simulator - Smooth ROTATE 🤖</h2>
+<textarea id="commands" placeholder="Type commands: MOVE 3, TURN LEFT, ROTATE 45"></textarea>
+<div id="controls">
+    <button onclick="runRobot()">RUN</button>
+    <button onclick="pauseResume()">PAUSE</button>
+    <select id="speed">
+        <option value="100">Slow</option>
+        <option value="50">Medium</option>
+        <option value="20">Fast</option>
+    </select>
+</div>
+
+<div id="container">
+    <div>
+        <h3>Robot Map</h3>
+        <canvas id="canvas" width="500" height="500"></canvas>
+    </div>
+    <div>
+        <h3>Command Log</h3>
+        <div id="log"></div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const logDiv = document.getElementById('log');
+let speedControl = document.getElementById('speed');
+
+const gridSize = 50;
+
+let robot = { x:0, y:0, dir:0, trail:[{x:0,y:0}] };
+let paused = false;
+
+function drawGrid() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle="#ddd";
+    for(let i=0;i<=canvas.width;i+=gridSize){
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke();
+    }
+}
+
+function drawTrail() {
+    if(robot.trail.length<2) return;
+    ctx.strokeStyle="blue";
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(robot.trail[0].x*gridSize + gridSize/2, robot.trail[0].y*gridSize + gridSize/2);
+    for(let pos of robot.trail){
+        ctx.lineTo(pos.x*gridSize + gridSize/2, pos.y*gridSize + gridSize/2);
+    }
+    ctx.stroke();
+}
+
+function drawRobot(){
+    drawGrid();
+    drawTrail();
+    ctx.save();
+    ctx.translate(robot.x*gridSize + gridSize/2, robot.y*gridSize + gridSize/2);
+    ctx.rotate(robot.dir*Math.PI/180);
+    // Robot body
+    ctx.fillStyle="red";
+    ctx.fillRect(-gridSize/3,-gridSize/3,gridSize*2/3,gridSize*2/3);
+    // Triangle indicator for direction
+    ctx.fillStyle="yellow";
+    ctx.beginPath();
+    ctx.moveTo(0,-gridSize/3);
+    ctx.lineTo(-gridSize/6,0);
+    ctx.lineTo(gridSize/6,0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+function log(text){
+    logDiv.innerHTML += text+"<br>";
+    logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+
+async function animateTurn(targetDir){
+    let steps = 50; // smoother rotation
+    let delta = (targetDir - robot.dir)/steps;
+    for(let i=0;i<steps;i++){
+        while(paused) await sleep(50);
+        robot.dir += delta;
+        drawRobot(); // redraw robot at same position
+        await sleep(parseInt(speedControl.value));
+    }
+    robot.dir = targetDir;
+}
+
+async function animateMove(distance){
+    let steps = 50;
+    let stepDistance = distance/steps;
+    for(let i=0;i<steps;i++){
+        while(paused) await sleep(50);
+        let rad = robot.dir*Math.PI/180;
+        robot.x += stepDistance*Math.sin(rad);
+        robot.y -= stepDistance*Math.cos(rad);
+        robot.trail.push({x:robot.x, y:robot.y});
+        drawRobot();
+        await sleep(parseInt(speedControl.value));
+    }
+}
+
+async function runRobot(){
+    let commands = document.getElementById('commands').value.split("\n");
+    robot = {x:0, y:0, dir:0, trail:[{x:0,y:0}]};
+    drawRobot();
+    logDiv.innerHTML="";
+    paused = false;
+    document.querySelector("#controls button:nth-child(2)").innerText="PAUSE";
+
+    for(let cmd of commands){
+        cmd = cmd.trim().toUpperCase();
+        if(cmd.startsWith("MOVE")){
+            let parts = cmd.split(" ");
+            let distance = parseInt(parts[1] || 1);
+            log(`<b>${cmd}</b> | Moving`);
+            await animateMove(distance);
+            log(`Position: (${robot.x.toFixed(2)},${robot.y.toFixed(2)}) | Angle: ${robot.dir.toFixed(2)}°`);
+        } else if(cmd.startsWith("TURN")){
+            if(cmd.includes("LEFT")){
+                let targetDir = (robot.dir - 90 + 360)%360;
+                log(`<b>${cmd}</b> | Turning left`);
+                await animateTurn(targetDir);
+            } else if(cmd.includes("RIGHT")){
+                let targetDir = (robot.dir + 90)%360;
+                log(`<b>${cmd}</b> | Turning right`);
+                await animateTurn(targetDir);
+            }
+            log(`Angle after turn: ${robot.dir.toFixed(2)}° | Position: (${robot.x.toFixed(2)},${robot.y.toFixed(2)})`);
+        } else if(cmd.startsWith("ROTATE")){
+            let parts = cmd.split(" ");
+            let angle = parseInt(parts[1] || 0);
+            let targetDir = (robot.dir + angle)%360;
+            log(`<b>${cmd}</b> | Rotating in place`);
+            await animateTurn(targetDir);
+            log(`Angle after rotate: ${robot.dir.toFixed(2)}° | Position: (${robot.x.toFixed(2)},${robot.y.toFixed(2)})`);
+        } else if(cmd.startsWith("STOP")){
+            log(`<b>${cmd}</b> | Robot STOPPED`);
+        }
+        await sleep(100);
+    }
+}
+
+function pauseResume(){
+    paused = !paused;
+    document.querySelector("#controls button:nth-child(2)").innerText = paused?"RESUME":"PAUSE";
+}
+
+drawGrid();
+drawRobot();
+</script>
+
+</body>
+</html>

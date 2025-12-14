@@ -43,12 +43,9 @@
      TURN = 259,
      LEFT = 260,
      RIGHT = 261,
-     ROTATE = 262,
-     STOP = 263,
-     REPEAT = 264,
-     LBRACE = 265,
-     RBRACE = 266,
-     NUMBER = 267
+     STOP = 262,
+     ROTATE = 263,
+     NUMBER = 264
    };
 #endif
 
@@ -59,12 +56,12 @@ typedef union YYSTYPE
 {
 
 /* Line 1676 of yacc.c  */
-#line 20 "parser.y"
+#line 26 "parser.y"
  int num; 
 
 
 /* Line 1676 of yacc.c  */
-#line 68 "parser.tab.h"
+#line 65 "parser.tab.h"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */

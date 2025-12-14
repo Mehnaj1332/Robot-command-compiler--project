@@ -72,24 +72,30 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
+
+typedef struct Command {
+    char type[32];
+    int value;
+} Command;
+
+Command commands[1000];
+int cmd_index = 0;
+
+/* Robot state */
+int sim_x = 0;
+int sim_y = 0;
+int sim_angle = 0; /* 0=NORTH, 90=EAST, 180=SOUTH, 270=WEST */
 
 void yyerror(const char *s);
 int yylex(void);
-
-int x = 0, y = 0;
-int angle = 0;
-
-void do_move(int n){
-    double r = angle * M_PI / 180.0;
-    x += (int)round(n * sin(r));
-    y += (int)round(n * cos(r));
-    printf("MOVE %d -> (%d,%d)\n", n, x, y);
-}
+void apply_command(const char* type, int value);
+const char* angle_to_dir(int angle);
 
 
 /* Line 189 of yacc.c  */
-#line 93 "parser.tab.c"
+#line 99 "parser.tab.c"
 
 /* Enabling traces.  */
 #ifndef YYDEBUG
@@ -120,12 +126,9 @@ void do_move(int n){
      TURN = 259,
      LEFT = 260,
      RIGHT = 261,
-     ROTATE = 262,
-     STOP = 263,
-     REPEAT = 264,
-     LBRACE = 265,
-     RBRACE = 266,
-     NUMBER = 267
+     STOP = 262,
+     ROTATE = 263,
+     NUMBER = 264
    };
 #endif
 
@@ -136,12 +139,12 @@ typedef union YYSTYPE
 {
 
 /* Line 214 of yacc.c  */
-#line 20 "parser.y"
+#line 26 "parser.y"
  int num; 
 
 
 /* Line 214 of yacc.c  */
-#line 145 "parser.tab.c"
+#line 148 "parser.tab.c"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
@@ -153,7 +156,7 @@ typedef union YYSTYPE
 
 
 /* Line 264 of yacc.c  */
-#line 157 "parser.tab.c"
+#line 160 "parser.tab.c"
 
 #ifdef short
 # undef short
@@ -366,22 +369,22 @@ union yyalloc
 #endif
 
 /* YYFINAL -- State number of the termination state.  */
-#define YYFINAL  13
+#define YYFINAL  12
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   23
+#define YYLAST   11
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  13
+#define YYNTOKENS  10
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  3
+#define YYNNTS  4
 /* YYNRULES -- Number of rules.  */
 #define YYNRULES  9
 /* YYNRULES -- Number of states.  */
-#define YYNSTATES  21
+#define YYNSTATES  16
 
 /* YYTRANSLATE(YYLEX) -- Bison symbol number corresponding to YYLEX.  */
 #define YYUNDEFTOK  2
-#define YYMAXUTOK   267
+#define YYMAXUTOK   264
 
 #define YYTRANSLATE(YYX)						\
   ((unsigned int) (YYX) <= YYMAXUTOK ? yytranslate[YYX] : YYUNDEFTOK)
@@ -415,7 +418,7 @@ static const yytype_uint8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     1,     2,     3,     4,
-       5,     6,     7,     8,     9,    10,    11,    12
+       5,     6,     7,     8,     9
 };
 
 #if YYDEBUG
@@ -423,22 +426,21 @@ static const yytype_uint8 yytranslate[] =
    YYRHS.  */
 static const yytype_uint8 yyprhs[] =
 {
-       0,     0,     3,     6,     8,    11,    15,    19,    22,    29
+       0,     0,     3,     5,     8,    10,    13,    17,    21,    24
 };
 
 /* YYRHS -- A `-1'-separated list of the rules' RHS.  */
 static const yytype_int8 yyrhs[] =
 {
-      14,     0,    -1,    14,    15,    -1,    15,    -1,     3,    12,
-      -1,     4,     5,    12,    -1,     4,     6,    12,    -1,     7,
-      12,    -1,     9,    12,    10,     3,    12,    11,    -1,     8,
-      -1
+      11,     0,    -1,    12,    -1,    12,    13,    -1,    13,    -1,
+       3,     9,    -1,     4,     5,     9,    -1,     4,     6,     9,
+      -1,     8,     9,    -1,     7,    -1
 };
 
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,    29,    29,    30,    34,    37,    40,    43,    46,    52
+       0,    34,    34,    38,    39,    43,    50,    57,    64,    71
 };
 #endif
 
@@ -447,9 +449,8 @@ static const yytype_uint8 yyrline[] =
    First, the terminals, then, starting at YYNTOKENS, nonterminals.  */
 static const char *const yytname[] =
 {
-  "$end", "error", "$undefined", "MOVE", "TURN", "LEFT", "RIGHT",
-  "ROTATE", "STOP", "REPEAT", "LBRACE", "RBRACE", "NUMBER", "$accept",
-  "program", "command", 0
+  "$end", "error", "$undefined", "MOVE", "TURN", "LEFT", "RIGHT", "STOP",
+  "ROTATE", "NUMBER", "$accept", "program", "commands_list", "command", 0
 };
 #endif
 
@@ -458,21 +459,20 @@ static const char *const yytname[] =
    token YYLEX-NUM.  */
 static const yytype_uint16 yytoknum[] =
 {
-       0,   256,   257,   258,   259,   260,   261,   262,   263,   264,
-     265,   266,   267
+       0,   256,   257,   258,   259,   260,   261,   262,   263,   264
 };
 # endif
 
 /* YYR1[YYN] -- Symbol number of symbol that rule YYN derives.  */
 static const yytype_uint8 yyr1[] =
 {
-       0,    13,    14,    14,    15,    15,    15,    15,    15,    15
+       0,    10,    11,    12,    12,    13,    13,    13,    13,    13
 };
 
 /* YYR2[YYN] -- Number of symbols composing right hand side of rule YYN.  */
 static const yytype_uint8 yyr2[] =
 {
-       0,     2,     2,     1,     2,     3,     3,     2,     6,     1
+       0,     2,     1,     2,     1,     2,     3,     3,     2,     1
 };
 
 /* YYDEFACT[STATE-NAME] -- Default rule to reduce with in state
@@ -480,15 +480,14 @@ static const yytype_uint8 yyr2[] =
    means the default is an error.  */
 static const yytype_uint8 yydefact[] =
 {
-       0,     0,     0,     0,     9,     0,     0,     3,     4,     0,
-       0,     7,     0,     1,     2,     5,     6,     0,     0,     0,
-       8
+       0,     0,     0,     9,     0,     0,     2,     4,     5,     0,
+       0,     8,     1,     3,     6,     7
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-      -1,     6,     7
+      -1,     5,     6,     7
 };
 
 /* YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
@@ -496,15 +495,14 @@ static const yytype_int8 yydefgoto[] =
 #define YYPACT_NINF -8
 static const yytype_int8 yypact[] =
 {
-       7,    -7,    -4,    -6,    -8,     1,     0,    -8,    -8,     5,
-       6,    -8,     2,    -8,    -8,    -8,    -8,    16,     8,    10,
-      -8
+      -3,    -7,     1,    -8,    -6,     8,    -3,    -8,    -8,     0,
+       2,    -8,    -8,    -8,    -8,    -8
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-      -8,    -8,    17
+      -8,    -8,    -8,     4
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]].  What to do in state STATE-NUM.  If
@@ -514,25 +512,22 @@ static const yytype_int8 yypgoto[] =
 #define YYTABLE_NINF -1
 static const yytype_uint8 yytable[] =
 {
-      13,     9,    10,     1,     2,     8,    11,     3,     4,     5,
-       1,     2,    17,    12,     3,     4,     5,    15,    16,    18,
-      19,    20,     0,    14
+       1,     2,     8,    11,     3,     4,     9,    10,    12,    14,
+      13,    15
 };
 
-static const yytype_int8 yycheck[] =
+static const yytype_uint8 yycheck[] =
 {
-       0,     5,     6,     3,     4,    12,    12,     7,     8,     9,
-       3,     4,    10,    12,     7,     8,     9,    12,    12,     3,
-      12,    11,    -1,     6
+       3,     4,     9,     9,     7,     8,     5,     6,     0,     9,
+       6,     9
 };
 
 /* YYSTOS[STATE-NUM] -- The (internal number of the) accessing
    symbol of state STATE-NUM.  */
 static const yytype_uint8 yystos[] =
 {
-       0,     3,     4,     7,     8,     9,    14,    15,    12,     5,
-       6,    12,    12,     0,    15,    12,    12,    10,     3,    12,
-      11
+       0,     3,     4,     7,     8,    11,    12,    13,     9,     5,
+       6,     9,     0,    13,     9,     9
 };
 
 #define yyerrok		(yyerrstatus = 0)
@@ -1343,58 +1338,65 @@ yyreduce:
   YY_REDUCE_PRINT (yyn);
   switch (yyn)
     {
-        case 4:
+        case 5:
 
 /* Line 1455 of yacc.c  */
-#line 35 "parser.y"
-    { do_move((yyvsp[(2) - (2)].num)); ;}
-    break;
-
-  case 5:
-
-/* Line 1455 of yacc.c  */
-#line 38 "parser.y"
-    { angle = (angle + (yyvsp[(3) - (3)].num)) % 360; ;}
+#line 44 "parser.y"
+    {
+            strcpy(commands[cmd_index].type, "MOVE");
+            commands[cmd_index].value = (yyvsp[(2) - (2)].num);
+            cmd_index++;
+        ;}
     break;
 
   case 6:
 
 /* Line 1455 of yacc.c  */
-#line 41 "parser.y"
-    { angle = (angle - (yyvsp[(3) - (3)].num) + 360) % 360; ;}
+#line 51 "parser.y"
+    {
+            strcpy(commands[cmd_index].type, "TURN LEFT");
+            commands[cmd_index].value = (yyvsp[(3) - (3)].num);
+            cmd_index++;
+        ;}
     break;
 
   case 7:
 
 /* Line 1455 of yacc.c  */
-#line 44 "parser.y"
-    { angle = (angle + (yyvsp[(2) - (2)].num)) % 360; ;}
+#line 58 "parser.y"
+    {
+            strcpy(commands[cmd_index].type, "TURN RIGHT");
+            commands[cmd_index].value = (yyvsp[(3) - (3)].num);
+            cmd_index++;
+        ;}
     break;
 
   case 8:
 
 /* Line 1455 of yacc.c  */
-#line 47 "parser.y"
+#line 65 "parser.y"
     {
-            for(int i=0;i<(yyvsp[(2) - (6)].num);i++)
-                do_move((yyvsp[(5) - (6)].num));
+            strcpy(commands[cmd_index].type, "ROTATE");
+            commands[cmd_index].value = (yyvsp[(2) - (2)].num);
+            cmd_index++;
         ;}
     break;
 
   case 9:
 
 /* Line 1455 of yacc.c  */
-#line 53 "parser.y"
+#line 72 "parser.y"
     {
-            printf("STOP\nFINAL: (%d,%d) angle=%d\n", x, y, angle);
-            exit(0);
+            strcpy(commands[cmd_index].type, "STOP");
+            commands[cmd_index].value = 0;
+            cmd_index++;
         ;}
     break;
 
 
 
 /* Line 1455 of yacc.c  */
-#line 1398 "parser.tab.c"
+#line 1400 "parser.tab.c"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -1606,17 +1608,110 @@ yyreturn:
 
 
 /* Line 1675 of yacc.c  */
-#line 59 "parser.y"
+#line 79 "parser.y"
 
 
-void yyerror(const char *s){
-    printf("Syntax Error\n");
+void yyerror(const char *s) {
+    printf("[Syntax Error]: %s\n", s);
+}
+
+/* Map angle to cardinal/diagonal direction */
+const char* angle_to_dir(int angle){
+    angle = (angle % 360 + 360) % 360; // normalize
+
+    switch(angle){
+        case 0:   return "NORTH";
+        case 45:  return "NORTH-EAST";
+        case 90:  return "EAST";
+        case 135: return "SOUTH-EAST";
+        case 180: return "SOUTH";
+        case 225: return "SOUTH-WEST";
+        case 270: return "WEST";
+        case 315: return "NORTH-WEST";
+        default:  return ""; // unknown angle, numeric only
+    }
+}
+
+/* Execute commands */
+void apply_command(const char* type, int value){
+
+    printf("-> Executing: %-12s %4d\n", type, value);
+
+    if(strcmp(type, "MOVE") == 0){
+        double rad = sim_angle * M_PI / 180.0;
+        int dx = (int)round(value * sin(rad));
+        int dy = (int)round(value * cos(rad));
+
+        sim_x += dx;
+        sim_y += dy;
+
+        printf("   Moved to: (%d, %d) | Direction: %s %d°\n",
+               sim_x, sim_y, angle_to_dir(sim_angle), sim_angle);
+    }
+
+    else if(strcmp(type, "TURN LEFT") == 0){
+        sim_angle = (sim_angle + value) % 360;
+        if(sim_angle < 0) sim_angle += 360;
+
+        printf("   Turned LEFT  %3d° -> Direction: %s %d°\n",
+               value, angle_to_dir(sim_angle), sim_angle);
+    }
+
+    else if(strcmp(type, "TURN RIGHT") == 0){
+        sim_angle = (sim_angle - value + 360) % 360;
+
+        printf("   Turned RIGHT %3d° -> Direction: %s %d°\n",
+               value, angle_to_dir(sim_angle), sim_angle);
+    }
+
+    else if(strcmp(type, "ROTATE") == 0){
+        sim_angle = (sim_angle + value) % 360;
+        if(sim_angle < 0) sim_angle += 360;
+
+        printf("   Rotated      %3d° -> Direction: %s %d°\n",
+               value, angle_to_dir(sim_angle), sim_angle);
+    }
+
+    else if(strcmp(type, "STOP") == 0){
+        printf("   Robot STOPPED.\n");
+    }
 }
 
 int main(){
-    printf("Mini Robot Simulator (with LOOP)\n");
-    printf("-------------------------------\n");
+
+    printf("=====================================\n");
+    printf("       ADVANCED ROBOT SIMULATOR\n");
+    printf("=====================================\n\n");
+
+    printf("Parsing commands...\n\n");
+
     yyparse();
+
+    printf("\n=====================================\n");
+    printf("        ROBOT MOVEMENT REPLAY\n");
+    printf("=====================================\n\n");
+
+    for(int i = 0; i < cmd_index; i++){
+        apply_command(commands[i].type, commands[i].value);
+        printf("-------------------------------------\n");
+    }
+
+    printf("\n=====================================\n");
+    printf("          FINAL ROBOT STATE\n");
+    printf("=====================================\n\n");
+
+    printf("Position : (%d, %d)\n", sim_x, sim_y);
+    printf("Direction: %s %d°\n", angle_to_dir(sim_angle), sim_angle);
+
+    printf("\nASCII Map Legend:\n");
+    printf("       ^ NORTH\n");
+    printf("       |\n");
+    printf("WEST <--+--> EAST\n");
+    printf("       |\n");
+    printf("       v SOUTH\n");
+
+    printf("=====================================\n");
+
     return 0;
 }
 
